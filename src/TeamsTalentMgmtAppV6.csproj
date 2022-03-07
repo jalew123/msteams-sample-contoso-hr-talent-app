@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <None Remove="StaticViews\proactivemessaging.html" />
+    <None Remove="StaticViews\proactivemessagingv2.html" />
   </ItemGroup>
 
   <ItemGroup>

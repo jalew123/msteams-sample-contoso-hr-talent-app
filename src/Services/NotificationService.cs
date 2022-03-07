@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AdaptiveCards;
+using Azure;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Connector;
@@ -96,26 +97,146 @@ namespace TeamsTalentMgmtApp.Controllers
             await SendProactiveNotification(recruiter.Alias, tenantId, activity, cancellationToken);
         }
 
+        public async Task<NotificationResult> SendProactiveChannelNotification(string channelId, IActivity activityToSend, CancellationToken cancellationToken = default)
+        {
+
+            //stored creds for use with connector client
+            var credentials = new MicrosoftAppCredentials(_appSettings.MicrosoftAppId, _appSettings.MicrosoftAppPassword);
+
+            //setting conversationparameters for messaging a user 1 on 1 with the bot
+            var conversationParameters = new ConversationParameters
+            {
+                IsGroup = true,
+                ChannelData = new { channel = new {id = channelId } },
+                Activity = (Activity)activityToSend,
+            };
+
+            //uses CloudAdapter to create the conversation and awaits a response
+
+            try
+            {
+                await ((CloudAdapter)_adapter).CreateConversationAsync(credentials.MicrosoftAppId, channelId, _appSettings.ServiceUrl, credentials.OAuthScope, conversationParameters, (t1, c1) =>
+                {
+
+                    var conversationReference = t1.Activity.GetConversationReference();
+                    return Task.CompletedTask;
+
+
+                    //commented out - but you can use ContinueConversationAsync if you want to reply to a specific thread, but you need to find the original activity. Use Graph API (or keep track of the theadID in persistant storage) to grab the Thread ID and then feed it into the Activity
+                    //await ((CloudAdapter)_adapter).ContinueConversationAsync(credentials.MicrosoftAppId, conversationReference, async (t2, c2) =>
+                    //{
+                    //    await t2.SendActivityAsync(activityToSend, c2);
+                    //}, cancellationToken);
+                }, cancellationToken);
+
+                return NotificationResult.Success;
+            }
+            catch (ErrorResponseException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                return NotificationResult.BotNotInstalled;
+            }
+            catch
+            {
+                return NotificationResult.Failed;
+            }   
+        }
+
+
+
+        //todo: Make Group Notificaitons work:
+
+        public async Task<NotificationResult> SendGroupProactiveNotification(string[] upns, string tenantId, IActivity activity, CancellationToken cancellationToken)
+        {
+
+            
+            
+            //check if request contains OIDs and if not, change UPNs or Aliases to OIDs via Graph API Call. This returns all user OIDs, in an array. If null, user cannot be found.
+            var chatId = await _graphApiService.GetGroupChatId(upns, tenantId, cancellationToken);
+            
+            if (chatId == null)
+            {
+                //todo: make this better...
+                return NotificationResult.AliasNotFound;
+            }
+
+
+
+            //use ChatID to send proactive message (create conversation and reply)
+
+
+            //stored creds for use with connector client
+            var credentials = new MicrosoftAppCredentials(_appSettings.MicrosoftAppId, _appSettings.MicrosoftAppPassword);
+
+            //initalise connectorclient which is the wrapper around v3 Bot Service endpoint
+            //var connectorClient = new ConnectorClient(new Uri(_appSettings.ServiceUrl), credentials);
+
+            //get conversation members for ChatId (making call to v3/conversation/members in bot service and store in members variable
+            //var members = await connectorClient.Conversations.GetConversationMembersAsync(chatId);
+
+            var conversationParameters = new ConversationParameters
+            {
+                IsGroup = true,
+                ChannelData = new { channel = new { id = chatId } },
+                Activity = (Activity)activity,
+            };
+
+            //uses CloudAdapter to create the conversation and awaits a response
+            await ((CloudAdapter)_adapter).CreateConversationAsync(credentials.MicrosoftAppId, chatId, _appSettings.ServiceUrl, credentials.OAuthScope, conversationParameters, async (t1, c1) =>
+            {
+                var conversationReference = t1.Activity.GetConversationReference();
+                await ((CloudAdapter)_adapter).ContinueConversationAsync(credentials.MicrosoftAppId, conversationReference, async (t2, c2) =>
+                {
+                    await t2.SendActivityAsync(activity, c2);
+                }, cancellationToken);
+            }, cancellationToken);
+
+            return NotificationResult.Success;
+        }
+
+
+
+
+        //end
+
+
+
+
+
+
+
+
+
+
+
+
         public async Task<NotificationResult> SendProactiveNotification(string aliasUpnOrOid, string tenantId, IActivity activity, CancellationToken cancellationToken)
         {
+            //Uses App Token to make call to Graph API to get ChatIDforUser and also expands the alias to a UPN
             var (upn, chatId) = await _graphApiService.GetProactiveChatIdForUser(aliasUpnOrOid, tenantId, cancellationToken);
 
+            //if UPN is null, return with error code
             if (upn == null)
             {
                 return NotificationResult.AliasNotFound;
             }
 
+            //if chatId doesn't exist, bot isn't installed. return 412
             if (chatId == null)
             {
                 return NotificationResult.BotNotInstalled;
             }
 
+            //stored creds for use with connector client
             var credentials = new MicrosoftAppCredentials(_appSettings.MicrosoftAppId, _appSettings.MicrosoftAppPassword);
 
+            //initalise connectorclient which is the wrapper around v3 Bot Service endpoint
             var connectorClient = new ConnectorClient(new Uri(_appSettings.ServiceUrl), credentials);
 
+            //get conversation members for ChatId (making call to v3/conversation/members in bot service and store in members variable
             var members = await connectorClient.Conversations.GetConversationMembersAsync(chatId);
 
+            //JACKNOTE: will need everything from here to message channel:
+            //setting conversationparameters for messaging a user 1 on 1 with the bot
             var conversationParameters = new ConversationParameters
             {
                 IsGroup = false,
@@ -127,6 +248,7 @@ namespace TeamsTalentMgmtApp.Controllers
                 TenantId = tenantId,
             };
 
+            //uses CloudAdapter to create the conversation and awaits a response
             await ((CloudAdapter)_adapter).CreateConversationAsync(credentials.MicrosoftAppId, null, _appSettings.ServiceUrl, credentials.OAuthScope, conversationParameters, async (t1, c1) =>
             {
                 var conversationReference = t1.Activity.GetConversationReference();

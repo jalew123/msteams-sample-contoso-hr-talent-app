@@ -38,18 +38,119 @@ namespace TeamsTalentMgmtApp.Services
             _databaseContext = databaseContext;
         }
 
+        private async Task<Guid[]> GetIdsForUsers(string[] aliasUpnsOrOids, GraphServiceClient graphClient, CancellationToken cancellationToken)
+        {
+            
+
+            var oids = new List<Guid>();
+
+            //write foreach loop containing:
+            foreach (var aliasUpnOrOid in aliasUpnsOrOids)
+            {
+                //If Alias is submitted, instead of UPN, changes Alias to UPN (or leaves it as OID if that is what was passed)
+                var upn = await GetUpnFromAlias(graphClient, aliasUpnOrOid, cancellationToken);
+                if (upn == null)
+                {
+                    //todo: return which UPN has the issue and display it in the response.
+                    return null;
+                }
+                //at this point, we either have a OID or UPN. Pass that to the GetOidFromUpn to changes UPN to OID, if request
+                var userOid = await GetOidFromUpn(graphClient, upn, cancellationToken);
+                //checks if GUID is empty, and returns null if so
+                if (userOid == Guid.Empty)
+                {
+                    //todo: return which UPN has the issue and display it in the response.
+                    return null;
+                }
+                //take OID and append it to the list
+                oids.Add(userOid);
+            }
+            
+            return oids.ToArray();
+        }
+
+        public async Task<string> GetGroupChatId(string[] aliasUpnsOrOids, string tenantId, CancellationToken cancellationToken)
+        {
+            //grab a token calling private method with tenantId passed to it
+            var token = await GetTokenForApp(tenantId);
+            //create Graph Client
+            var graphClient = GetGraphServiceClient(token);
+            //get the oids in an array
+            var oids = await GetIdsForUsers(aliasUpnsOrOids, graphClient, cancellationToken);
+
+            //initialise what we need for the call to create the group chat with the members in
+            var members = new ChatMembersCollectionPage();
+            foreach (var oid in oids)
+            {
+                members.Add(new AadUserConversationMember
+                {
+                    Roles = new List<String>()
+                    {
+                        "owner"
+                    },
+                    AdditionalData = new Dictionary<string, object>()
+                    {
+                        {"user@odata.bind", "https://graph.microsoft.com/v1.0/users('" + oid + "')"}
+                    }
+                });
+            }
+
+            //use Graph Client to get ChatId for Group
+            var chat = new Chat
+            {
+                ChatType = ChatType.Group,
+                Topic = "Group chat title",
+                Members = members 
+            };
+
+            //make call to graph
+            var chatInfo = await graphClient.Chats
+                .Request()
+                .AddAsync(chat);
+
+            return chatInfo.Id;
+
+        }
+        
+        private async Task<Guid> GetOidFromUpn(GraphServiceClient graphClient, string upnOrOid, CancellationToken cancellationToken)
+        {
+            //check if UPN is already an OID
+            if (Guid.TryParse(upnOrOid, out Guid oid))
+            {
+                return oid;
+            }
+
+            //if not make a call to Graph to change UPN to OID
+            try
+            {
+                //make call to Graph API get user and grab OID in response
+                var userInfo = await graphClient.Users[upnOrOid]
+                    .Request()
+                    .GetAsync(cancellationToken);
+
+                return Guid.Parse(userInfo.Id);
+            }
+
+            catch
+            {
+                //if any exception gets thrown, return an empty GUID (probably a made up user, that doesn't exist, and Graph returning a 404 to us!)
+                return Guid.Empty;
+            }
+
+        }
+
         public async Task<(string upn, string chatId)> GetProactiveChatIdForUser(string aliasUpnOrOid, string tenantId, CancellationToken cancellationToken)
         {
             var token = await GetTokenForApp(tenantId);
 
-            return await GetProactiveChatIdForUserInternal(token, aliasUpnOrOid, tenantId, cancellationToken);
+            return await GetProactiveChatIdForUserInternal(token, aliasUpnOrOid, cancellationToken);
         }
 
-        private async Task<(string upn, string chatId)> GetProactiveChatIdForUserInternal(string token, string aliasUpnOrOid, string tenantId, CancellationToken cancellationToken)
+        private async Task<(string upn, string chatId)> GetProactiveChatIdForUserInternal(string token, string aliasUpnOrOid, CancellationToken cancellationToken)
         {
             var graphClient = GetGraphServiceClient(token);
 
-            var upn = await GetUpnFromAlias(token, aliasUpnOrOid, cancellationToken);
+            var upn = await GetUpnFromAlias(graphClient, aliasUpnOrOid, cancellationToken);
             if (upn == null)
             {
                 return (null, null);
@@ -74,7 +175,7 @@ namespace TeamsTalentMgmtApp.Services
             return (upn, chat.Id);
         }
 
-        private async Task<string> GetUpnFromAlias(string token, string aliasUpnOrOid, CancellationToken cancellationToken)
+        private async Task<string> GetUpnFromAlias(GraphServiceClient graphClient, string aliasUpnOrOid, CancellationToken cancellationToken)
         {
             if (aliasUpnOrOid.Contains('@'))
             {
@@ -85,8 +186,6 @@ namespace TeamsTalentMgmtApp.Services
             {
                 return aliasUpnOrOid;
             }
-
-            var graphClient = GetGraphServiceClient(token);
 
             var users = await graphClient.Users.
                 Request().
@@ -106,14 +205,15 @@ namespace TeamsTalentMgmtApp.Services
         public async Task<InstallResult> InstallBotForUser(string aliasUpnOrOid, string tenantId, CancellationToken cancellationToken)
         {
             var token = await GetTokenForApp(tenantId);
-            var upn = await GetUpnFromAlias(token, aliasUpnOrOid, cancellationToken);
+            var graphClient = GetGraphServiceClient(token);
+            var upn = await GetUpnFromAlias(graphClient, aliasUpnOrOid, cancellationToken);
 
             if (upn == null)
             {
                 return InstallResult.AliasNotFound;
             }
 
-            var graphClient = GetGraphServiceClient(token);
+            
 
             var teamsApps = await graphClient.AppCatalogs.TeamsApps
                 .Request()
@@ -143,7 +243,7 @@ namespace TeamsTalentMgmtApp.Services
 
 
                     // Getting the chat id will confirm the installation was successful and send the welcome message
-                    await GetProactiveChatIdForUserInternal(token, aliasUpnOrOid, tenantId, cancellationToken);
+                    await GetProactiveChatIdForUserInternal(token, aliasUpnOrOid, cancellationToken);
 
                     success = true;
                 }
@@ -349,5 +449,7 @@ namespace TeamsTalentMgmtApp.Services
 
             return result.AccessToken;
         }
+
+        
     }
 }

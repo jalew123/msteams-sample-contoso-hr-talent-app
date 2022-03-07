@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AdaptiveCards;
@@ -35,7 +36,7 @@ namespace TeamsTalentMgmtApp.Controllers
         [HttpPost]
         [Route("api/installbot")]
         public async Task<IActionResult> InstallAsync(
-            [FromBody] UserTenantMessageRequest request, 
+            [FromBody] UserTenantMessageRequest request,
             CancellationToken cancellationToken)
         {
             try
@@ -63,7 +64,7 @@ namespace TeamsTalentMgmtApp.Controllers
         [HttpPost]
         [Route("api/notify")]
         public async Task<IActionResult> NotifyAsync(
-            [FromBody] NotifyRequest request, 
+            [FromBody] NotifyRequest request,
             CancellationToken cancellationToken)
         {
             try
@@ -86,9 +87,9 @@ namespace TeamsTalentMgmtApp.Controllers
                 }
 
                 var result = await _notificationService.SendProactiveNotification(
-                    request.Id, 
-                    request.TenantId, 
-                    activity, 
+                    request.Id,
+                    request.TenantId,
+                    activity,
                     cancellationToken);
 
                 if (result == NotificationResult.AliasNotFound)
@@ -101,7 +102,7 @@ namespace TeamsTalentMgmtApp.Controllers
                 {
                     // Precondition failed - app not installed!
                     return StatusCode(
-                        412, 
+                        412,
                         $"The bot has not been installed for '{request.Id}' in the tenant '{request.TenantId}'");
                 }
             }
@@ -112,7 +113,130 @@ namespace TeamsTalentMgmtApp.Controllers
 
             return Accepted();
         }
+
+        //TODOJACK: Create API Endpoint for notifying in Teams Channel
+        [HttpPost]
+        [Route("api/notifyChannel")]
+
+        public async Task<IActionResult> NotifyChannelAsync(
+            [FromBody] NotifyTeamsChannel request,
+            CancellationToken cancellationToken)
+        {
+            //add the logic in here...
+
+            try
+            {
+                IActivity activity;
+
+                if (request.Text != null)
+                {
+                    activity = MessageFactory.Text(request.Text);
+                }
+                else
+                {
+                    //take the JSON card from the request and turn it into an adaptive card using the SDK
+                    var card = AdaptiveCard.FromJson(request.Card.ToString()).Card;
+
+                    activity = MessageFactory.Attachment(new Attachment
+                    {
+                        Content = card,
+                        ContentType = AdaptiveCard.ContentType
+                    });
+                }
+                //todojack: create a new method to sendchannelnotification
+                var result = await _notificationService.SendProactiveChannelNotification(
+                    //need to work out how we change this to use Channel ID, Team ID
+                    request.ChannelId,
+                    activity,
+                    cancellationToken);
+
+                //////change to channelNotFound...
+                ////if (result == NotificationResult.AliasNotFound)
+                ////{
+                ////    // Alias not found
+                ////    //return NotFound($"Alias '{request.Id}' was not found in the tenant '{request.TenantId}'");
+                ////}
+
+                if (result == NotificationResult.BotNotInstalled)
+                {
+                    // Precondition failed - app not installed!
+                    return StatusCode(
+                        412,
+                        $"The bot has not been installed for '{request.TeamName}'/'{request.ChannelName}'");
+                }
+
+            }
+            catch (Microsoft.Graph.ServiceException ex)
+            {
+                return StatusCode((int)ex.StatusCode);
+            }
+
+            return Accepted();
+
+
+        }
+
+
+
+        [HttpPost]
+        [Route("api/notifyGroup")]
+
+        public async Task<IActionResult> NotifyGroupAsync(
+        [FromBody] NotifyGroupChat request,
+        CancellationToken cancellationToken)
+        {
+            try
+            {
+                IActivity activity;
+
+                if (request.Text != null)
+                {
+                    activity = MessageFactory.Text(request.Text);
+                }
+                else
+                {
+                    var card = AdaptiveCard.FromJson(request.Card.ToString()).Card;
+
+                    activity = MessageFactory.Attachment(new Attachment
+                    {
+                        Content = card,
+                        ContentType = AdaptiveCard.ContentType
+                    });
+                }
+
+                var result = await _notificationService.SendGroupProactiveNotification(
+                    request.Upns,
+                    request.TenantId,
+                    activity,
+                    cancellationToken);
+
+                //if (result == NotificationResult.AliasNotFound)
+                //{
+                //    // Alias not found
+                //    return NotFound($"Alias '{request.Id}' was not found in the tenant '{request.TenantId}'");
+                //}
+
+                //if (result == NotificationResult.BotNotInstalled)
+                //{
+                //    // Precondition failed - app not installed!
+                //    return StatusCode(
+                //        412,
+                //        $"The bot has not been installed for '{request.Id}' in the tenant '{request.TenantId}'");
+                //}
+            }
+            catch (Microsoft.Graph.ServiceException ex)
+            {
+                return StatusCode((int)ex.StatusCode);
+            }
+
+            return Accepted();
+        }
     }
+
+
+
+
+
 
     public class UserTenantMessageRequest
     {
@@ -124,5 +248,21 @@ namespace TeamsTalentMgmtApp.Controllers
     {
         public JsonElement Card { get; set; }
         public string Text { get; set; }
+    }
+    public class NotifyTeamsChannel
+    {
+        public string ChannelId { get; set; }
+        public string ChannelName { get; set; }
+        public string TeamName { get; set; }
+        public string Text { get; set; }
+        public JsonElement Card { get; set; }
+
+    }
+    public class NotifyGroupChat
+    {
+        public string[] Upns { get; set; }
+        public string TenantId { set; get; }
+        public string Text { get; set; }
+        public JsonElement Card { get; set; }
     }
 }

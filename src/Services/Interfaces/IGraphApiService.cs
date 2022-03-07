@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graph;
 using TeamsTalentMgmtApp.Models.DatabaseContext;
@@ -12,6 +13,8 @@ namespace TeamsTalentMgmtApp.Services.Interfaces
         Task<(Team Team, string DisplayName)> CreateNewTeamForPosition(Position position, string token, CancellationToken cancellationToken);
 
         Task<InstallResult> InstallBotForUser(string aliasUpnOrOid, string tenantId, CancellationToken cancellationToken);
+        Task<string> GetGroupChatId(string[] aliasUpnsOrOids, string tenantId, CancellationToken cancellationToken);
+
     }
 
     public enum InstallResult

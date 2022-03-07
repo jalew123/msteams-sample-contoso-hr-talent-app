@@ -51,6 +51,7 @@ signInWithTeams = async () => {
         console.log("Teams SSO Error: " + error);
         if (typeof error === "string" && error.toLowerCase() == "resourcedisabled") {
             console.log("Resource Disabled - probably something wrong with your manifest or Azure AD App Reg config");
+            //todo: Jack to sort this out so it actually displays the authentication prompt...
             $("#teamsConsentButton").show();
             return
         }
