@@ -31,6 +31,7 @@
             console.log(personsObject);
             var ids = personsObject.map(user => user.id)
             console.log(ids);
+            let tenantid = document.getElementById("tenantid2").value;
             //ids contains an array of the selected peoples Ids. We now need to pass this in the fetch request to the api
 
 
@@ -41,11 +42,13 @@
 
 
             $("#sendingRequest").show();
-            // submittoApiGroupMessage(ids, tenantid);
+            submittoApiGroupMessage(ids, tenantid);
 
         };
 
-
+        async function submitToApiGroupMessage(ids, tenantid) {
+            //todo: write the fetch request to send ids and tenantid to the API
+        }
 
 
 
@@ -216,6 +219,8 @@
         <mgt-login></mgt-login>
         Please select the people you want to Proactively Message in a Group Chat:
         <mgt-people-picker user-type="user"></mgt-people-picker>
+        <label>TenantId</label> <br>
+        <input id="tenantid2" type="text" size="40" placeholder="GUID of TenantID">  <br> <br>
         <button id="buttonProactiveGroupMessage" onclick="getDataFromPeoplePicker()">Send 'hello' in Group Chat via Bot Proactive Message</button>
     </div>
 
