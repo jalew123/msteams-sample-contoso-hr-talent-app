@@ -179,7 +179,7 @@ namespace TeamsTalentMgmtApp.Controllers
                 ChannelData = new { channel = new { id = chatId } },
                 Activity = (Activity)activity,
             };
-
+            //todo: getting bad request - likely that conversationParameters are not correct. Need to fix!
             //uses CloudAdapter to create the conversation and awaits a response
             await ((CloudAdapter)_adapter).CreateConversationAsync(credentials.MicrosoftAppId, chatId, _appSettings.ServiceUrl, credentials.OAuthScope, conversationParameters, async (t1, c1) =>
             {

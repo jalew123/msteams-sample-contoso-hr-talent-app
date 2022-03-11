@@ -46,9 +46,50 @@
 
         };
 
-        async function submitToApiGroupMessage(ids, tenantid) {
+        async function submittoApiGroupMessage(ids, tenantId) {
             //todo: write the fetch request to send ids and tenantid to the API
+            //generate and send request to api controllers
+            let data = await fetch(window.location.origin + '/api/notifyGroup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 'Upns': ids, 'tenantId': tenantId, 'text': 'hello' })
+            });
+
+            $("#sendingRequest").hide();
+
+            //deal with response from server
+            if (data.ok) {
+                console.log("HTTP Status: " + data.status);
+                console.log(data);
+                if (data.status >= 200 && data.status < 300) {
+                    $("#successfulRequest > span").html(data.status);
+                    $("#successfulRequest").show();
+                }
+
+            } else {
+                console.error("HTTP-Error: " + data.status);
+
+                if (data.status == '403') {
+                    $("#consentRequired").show();
+                }
+                if (data.status == '404') {
+                    $("#UPNdoesntexist").show();
+                }
+                if (data.status == '412') {
+                    $("#installRequired").show();
+                }
+                if (data.status == '400') {
+                    $("#badRequest").show();
+                }
+                if (data.status == '500') {
+                    $("#serverError").show();
+                }
+            }
+
         }
+            
 
 
 
