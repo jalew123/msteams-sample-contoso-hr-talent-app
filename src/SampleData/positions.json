@@ -6,7 +6,7 @@
     "level": 9,
     "locationId": 6,
     "hiringManagerId": 1,
-    "description": "We are looking for a Senior Software Engineer to produce and implement functional sotware solutions. You will work with management to define the software specifications and then implement them."
+    "description": "We are looking for a Senior Software Engineer to produce and implement functional software solutions. You will work with management to define the software specifications and then implement them."
   },
   {
     "title": "Full Stack Developer",
@@ -15,7 +15,7 @@
     "level": 7,
     "locationId": 7,
     "hiringManagerId": 2,
-    "description": "We are looking for a Full Stack Developer to produce and implement functional sotware solutions. You will work with management to define the software specifications and then implement them."
+    "description": "We are looking for a Full Stack Developer to produce and implement functional software solutions. You will work with management to define the software specifications and then implement them."
   },
   {
     "title": "Senior Designer",
@@ -24,6 +24,6 @@
     "level": 8,
     "locationId": 1,
     "hiringManagerId": 1,
-    "description": "We are looking for a Senior Designer to work with our Product and Engineering team to design newsuccessful products."
+    "description": "We are looking for a Senior Designer to work with our Product and Engineering team to design new successful products."
   }
 ]
